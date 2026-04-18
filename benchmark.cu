@@ -15,6 +15,7 @@ void launch_sort_kernel(int kernel_id, int *A, int *C, int size);
 }
 #endif
 
+// THIS BENCHMARKING CODE COMES FROM DR. WU'S ASSIGNMENT 2.
 // Verification helper: compare kernel result to reference
 // return 1 for fail to pass verification; 0 otherwise
 int verify_result(const int* reference, const int* result, int size, const char* kernel_name) {

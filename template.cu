@@ -5,6 +5,8 @@
 
 #define BS 1024
 
+// Credit for the code setup goes to 
+// Dr. Wu, replaced with code suited to our tasks.
 // Credit for the stand in kernels goes to
 // https://github.com/rbga/CUDA-Merge-and-Bitonic-Sort/tree/master
 // but these are NOT the final kernels.
