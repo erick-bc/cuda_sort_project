@@ -1,7 +1,7 @@
 NVCC ?= /usr/local/cuda-12.6/bin/nvcc
 
 sort: benchmark.cu template.cu
-	$(NVCC) $^ -o $@
+	$(NVCC) $^ -o $@.exe
 
 clean:
 	rm -f a.out sort
