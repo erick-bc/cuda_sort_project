@@ -15,6 +15,16 @@ void launch_sort_kernel(int kernel_id, int *A, int *C, int size);
 }
 #endif
 
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true) {
+   if (code != cudaSuccess) {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) {
+        exit(code);
+      }
+   }
+}
+
 // THIS BENCHMARKING CODE COMES FROM DR. WU'S ASSIGNMENT 2.
 // Verification helper: compare kernel result to reference
 // return 1 for fail to pass verification; 0 otherwise
@@ -31,16 +41,20 @@ int verify_result(const int* reference, const int* result, int size, const char*
     return errors > 0 ? 1 : 0;
 }
 
+using std::size_t;
+
 int main() {
     // Array sizes to test
-    int sizes[] = {1024, 2048, 4096};
+    gpuErrchk(cudaSetDevice(0));
+
+    int sizes[] = {1024, 2048, 4096}; // MUST BE POWERS OF 2
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
     int fails = 0;
     // Loop over each array size
     for (int s = 0; s < num_sizes; s++) {
-        const int size = sizes[s];
+        size_t size = (size_t) (sizes[s] * sizes[s]);
         printf("===================================================\n");
-        printf("Sorting for size: %d\n", size);
+        printf("Sorting for size: %zu\n", size);
         printf("---------------------------------------------------\n");
         printf("%-20s %15s %15s\n", "Kernel", "Time (ms)", "GB/s");
         printf("---------------------------------------------------\n");
@@ -54,13 +68,13 @@ int main() {
         ref_h    = (int *)malloc(size * sizeof(int));
 
         // Initialize array A with random integer values
-        for (int i = 0; i < size; i++) {
+        for (size_t i = 0; i < size; i++) {
             A_h[i] = rand() % 1000000; // one million
         }
 
         // Allocate device memory
-        cudaMalloc(&A_d, size * sizeof(int));
-        cudaMalloc(&C_d, size * sizeof(int));
+        gpuErrchk(cudaMalloc(&A_d, size * sizeof(int)));
+        gpuErrchk(cudaMalloc(&C_d, size * sizeof(int)));
 
         // Copy host data to device
         cudaMemcpy(A_d, A_h, size * sizeof(int), cudaMemcpyHostToDevice);
@@ -90,7 +104,7 @@ int main() {
         // Run student kernels (IDs 1-2)
         for (int kernel_to_run = 1; kernel_to_run <= 2; kernel_to_run++) {
             // Reset device memory for C
-            cudaMemset(C_d, 0, size * sizeof(int));
+            gpuErrchk(cudaMemset(C_d, 0, size * sizeof(int)));
 
             // Run the student's kernel and time it
             cudaEventRecord(start);
