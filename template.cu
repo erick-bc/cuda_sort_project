@@ -161,16 +161,42 @@ __global__ void __launch_bounds__(BS) merge_stage_kernel_v12(const int* __restri
     }
 }
 // - - kernel 2: (bitonic kernel)
-__global__ void bitonic_sort_gpu(int* arr, int j, int k, int n) {
+__global__ void bitonic_sort_gpu(int *arr, int j, int k, int n)
+{
     unsigned int i = blockDim.x * blockIdx.x + threadIdx.x;
-    if (i >= n) return;
+
+    if (i >= n)
+        return;
+
     unsigned int ij = i ^ j;
-    if (ij > i && ij < n) {
-        if ((i & k) == 0) {
-            if (arr[i] > arr[ij]) { int tmp = arr[i]; arr[i] = arr[ij]; arr[ij] = tmp; }
-        } else {
-            if (arr[i] < arr[ij]) { int tmp = arr[i]; arr[i] = arr[ij]; arr[ij] = tmp; }
+
+    if (ij > i && ij < n)
+    {
+        if ((i & k) == 0)
+        {
+            if (arr[i] > arr[ij])
+            {
+                int tmp = arr[i];
+                arr[i] = arr[ij];
+                arr[ij] = tmp;
+            }
         }
+        else
+        {
+            if (arr[i] < arr[ij])
+            {
+                int tmp = arr[i];
+                arr[i] = arr[ij];
+                arr[ij] = tmp;
+            }
+        }
+    }
+}
+
+__global__ void padded_kernel(int *arr, int size, int padded) { // Kernel to pad the array to the next power of 2 with INT_MAX so that bitonic sort                                                           
+    unsigned int i = blockDim.x * blockIdx.x + threadIdx.x;     // does not have to worry about out of bounds access.
+    if (i < padded) {
+        arr[i] = (i < size) ? arr[i] : INT_MAX; // Pad temp array with INT_MAX for sorting
     }
 }
 //------------------------------------------------------------------------------
@@ -200,14 +226,41 @@ extern "C" void launch_sort_kernel(int kernel_id, int *A, int *C, int size) {
         }
         cudaFree(gpu_temp);
 
-    } else if (kernel_id == 2) {
-        gpuErrchk(cudaMemcpy(C, A, size * sizeof(int), cudaMemcpyDeviceToDevice));
-        const int GS = (size + BS - 1) / BS;
-        for (int k = 2; k <= size; k <<= 1) {
-            for (int j = k >> 1; j > 0; j >>= 1) {
-                bitonic_sort_gpu<<<GS, BS>>>(C, j, k, size);
-                gpuErrchk(cudaDeviceSynchronize()); 
+    } 
+    else if (kernel_id == 2)
+    {
+        int padded = 1;                    // padded size to next power of 2 for bitonic sort
+        while (padded < size) padded <<= 1;   // So that bitonic sort can handle non-power-of-2 sizes.
+
+        int *gpu_temp;
+        gpuErrchk(cudaMalloc(&gpu_temp, padded * sizeof(int)));
+        gpuErrchk(cudaMemcpy(gpu_temp, A, size * sizeof(int), cudaMemcpyDeviceToDevice));
+
+        const int local_BS = 256; // Adjusted to 256 to better utilize GPU resources and hide latency.
+
+        int buffer = padded - size; // Number of padding elements needed
+
+        if(buffer > 0) // Only launch the padding kernel if we actually need to pad the array, avoiding 0 error and unnecessary kernel launch overhead.
+        {
+            const int padded_GS = (buffer + local_BS - 1) / local_BS;
+            padded_kernel<<<padded_GS, local_BS>>>(gpu_temp, size, padded); // kernel to padded the array with INT_MAX to make it a power of 2
+            gpuErrchk(cudaPeekAtLastError());
+        }
+        
+        const int GS = (padded + local_BS - 1) / local_BS;
+
+        for (int k = 2; k <= padded; k <<= 1)
+        {
+            for (int j = k >> 1; j > 0; j >>= 1)
+            {
+                bitonic_sort_gpu<<<GS, local_BS>>>(gpu_temp, j, k, padded);
+                gpuErrchk(cudaPeekAtLastError());
             }
         }
+        gpuErrchk(cudaDeviceSynchronize());
+
+        gpuErrchk(cudaMemcpy(C, gpu_temp, size * sizeof(int), cudaMemcpyDeviceToDevice)); // Copy only the sorted portion back to the array, ignoring the padded INT_MAX values.
+        cudaFree(gpu_temp);
     }
 }
+
