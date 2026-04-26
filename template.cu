@@ -25,8 +25,8 @@ using std::size_t;
 // but these are NOT the final kernels.
 // We have to optimize using various techniques.
 
-// - - Helper Functions (Professor's Logic: Co_Rank & Sequential Merge) - - 
-// --- 1. Vectorized Search ---
+// - - Helper Functions (Professor's Logic: Co-rank and sequential merge) - - 
+// --- 1. Vectorized search ---
 // Using binary search but unrolling the comparison logic
 ///
 __device__ __forceinline__ int co_rank_safe(int k, const int* __restrict__ A, int a_len, const int* __restrict__ B, int b_len) {
@@ -42,8 +42,8 @@ __device__ __forceinline__ int co_rank_safe(int k, const int* __restrict__ A, in
     }
     return low;
 }
-// Sequential Merge with ILP Padding
-// Unrolled Sequential Merge
+// Sequential merge with ILP padding
+// Unrolled sequential merge
 ///
 __device__ void merge_sequential(const int* A, int m, const int* B, int n, int* C) {
     int i = 0, j = 0, k = 0;
@@ -55,7 +55,7 @@ __device__ void merge_sequential(const int* A, int m, const int* B, int n, int* 
     while (i < m) C[k++] = A[i++];
     while (j < n) C[k++] = B[j++];
 }
-// --- VECTORIZED Block Sort (Phase 1 Turbo) ---
+// --- Vertorized block sort (Phase 1 turbo) ---
 ///
 // 
 __global__ void block_sort_kernel(int* __restrict__ in, int* __restrict__ out, int size) {
@@ -97,7 +97,7 @@ __global__ void block_sort_kernel(int* __restrict__ in, int* __restrict__ out, i
             if (block_start + i < size) out[block_start + i] = s_data[i];
     }
 }
-// - - KERNEL 1, Coarsened Parallel Merge Kernel - -
+// - - Kernel 1, Coarsened Parallel Merge Kernel - -
 // GPU Kernel for Merge Sort
 template<int TILE_SIZE>
 __global__ void __launch_bounds__(BS) merge_stage_kernel_v12(const int* __restrict__ in, int* __restrict__ out, int size, int wid) {
@@ -154,13 +154,13 @@ __global__ void __launch_bounds__(BS) merge_stage_kernel_v12(const int* __restri
         int out_idx = tile_start_global + t_start;
         int write_len = t_end - t_start;
         
-        // FIXED: Check both start AND end bounds to prevent memory corruption
+        // Check both start AND end bounds to prevent memory corruption
         if (out_idx >= 0 && out_idx + write_len <= size) {
             merge_sequential(sA + a_s, a_e - a_s, sB + b_s, b_e - b_s, out + out_idx);
         }
     }
 }
-// - - KERNEL 2: (BITONIC KERNEL)
+// - - kernel 2: (bitonic kernel)
 __global__ void bitonic_sort_gpu(int* arr, int j, int k, int n) {
     unsigned int i = blockDim.x * blockIdx.x + threadIdx.x;
     if (i >= n) return;
@@ -211,7 +211,3 @@ extern "C" void launch_sort_kernel(int kernel_id, int *A, int *C, int size) {
         }
     }
 }
-// - - Run Instructions - - 
-// 0. make clean
-// 1.make
-// 2. run ./sort.exe
