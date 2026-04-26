@@ -1,3 +1,4 @@
+# Taken from Dr. Wu's assignment code.
 # Path to the compiler
 NVCC := /usr/local/cuda-12.6/bin/nvcc
 
