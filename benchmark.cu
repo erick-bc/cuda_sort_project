@@ -4,6 +4,7 @@
 #include <cuda_runtime.h>
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
+#include <thrust/functional.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,17 +48,20 @@ int main() {
     // Array sizes to test
     gpuErrchk(cudaSetDevice(0));
 
-    int sizes[] = {1024, 2048, 4096}; // MUST BE POWERS OF 2
+    int sizes[] = {(int) pow(2, 15) /* 32,768 */, 
+                   (int) pow(2, 20) /* 1,048,576 */, 
+                   (int) pow(2, 25) /* 33,554,432 */, 
+                   (int) pow(2, 27) /* 134,217,728 */};
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
     int fails = 0;
     // Loop over each array size
     for (int s = 0; s < num_sizes; s++) {
-        size_t size = (size_t) (sizes[s] * sizes[s]);
-        printf("===================================================\n");
+        size_t size = sizes[s];
+        printf("=====================================================================================\n");
         printf("Sorting for size: %zu\n", size);
-        printf("---------------------------------------------------\n");
-        printf("%-20s %15s %15s\n", "Kernel", "Time (ms)", "GB/s");
-        printf("---------------------------------------------------\n");
+        printf("-------------------------------------------------------------------------------------\n");
+        printf("%-20s %15s %15s %15s %15s\n", "Kernel", "Time (ms)", "GB/s", "Peak bandwidth %%", "MKeys/s");
+        printf("-------------------------------------------------------------------------------------\n");
 
         int *A_d, *C_d;
         int *A_h, *result_h, *ref_h;
@@ -85,7 +89,9 @@ int main() {
         cudaEventCreate(&stop);
         float time;
 
-        // Compute reference result using Thrust sort
+        float gbps_peak = 760.0f; // from hardware specs
+        float total_bytes = size * (float) sizeof(int) * 2.0f; 
+        // Compute reference result using Thrust sort (Radix)
         cudaMemcpy(C_d, A_d, size * sizeof(int), cudaMemcpyDeviceToDevice);
         cudaEventRecord(start);
         thrust::device_ptr<int> d_ptr(C_d);
@@ -93,8 +99,29 @@ int main() {
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&time, start, stop);
-        float gbps = (size * (float)sizeof(int) * 1e-9f) / (time * 1e-3f);
-        printf("%-20s %15.2f %15.2f\n", "Thrust Sort", time, gbps);
+        
+        // passes = 4.0f;
+        // total_bytes = size * (float) sizeof(int) * 2.0f * passes;
+        float gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
+        float mkeys_sec = (size / 1e6f) / (time * 1e-3f); // Millions of Keys per second
+        float throughput_percent = (gbps / gbps_peak) * 100.0f; 
+        printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", "Thrust Sort (Radix)", time, gbps, throughput_percent, mkeys_sec);
+
+        // Compute reference result using Thrust sort (Merge)
+        cudaMemcpy(C_d, A_d, size * sizeof(int), cudaMemcpyDeviceToDevice);
+        cudaEventRecord(start);
+        thrust::device_ptr<int> d_ptr2(C_d);
+        thrust::sort(d_ptr2, d_ptr2 + size, thrust::less<int>());
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&time, start, stop);
+        
+        // passes = log2f((float) size);
+        // total_bytes = size * (float) sizeof(int) * 2.0f * passes;
+        gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
+        mkeys_sec = (size / 1e6f) / (time * 1e-3f);
+        throughput_percent = (gbps / gbps_peak) * 100.0f; 
+        printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", "Thrust Sort (Merge)", time, gbps, throughput_percent, mkeys_sec);
 
         // Copy reference result back to host
         cudaMemcpy(ref_h, C_d, size * sizeof(int), cudaMemcpyDeviceToHost);
@@ -103,26 +130,38 @@ int main() {
 
         // Run student kernels (IDs 1-2)
         for (int kernel_to_run = 1; kernel_to_run <= 2; kernel_to_run++) {
-            // Reset device memory for C
             gpuErrchk(cudaMemset(C_d, 0, size * sizeof(int)));
 
-            // Run the student's kernel and time it
             cudaEventRecord(start);
             launch_sort_kernel(kernel_to_run, A_d, C_d, size);
             cudaEventRecord(stop);
             cudaEventSynchronize(stop);
             cudaEventElapsedTime(&time, start, stop);
-            gbps = (size * (float)sizeof(int) * 1e-9f) / (time * 1e-3f);
+            
+            // float log2_size = log2f((float) size);
+            // if (kernel_to_run == 1) { // Merge
+            //     passes = log2_size;
+            //     total_bytes = size * (float) sizeof(int) * 2.0f * passes;
+            // }
+            // else if (kernel_to_run == 2) { // Bitonic
+            //    
+            //     float steps = (log2_size * (log2_size + 1.0f)) / 2.0f;
+            //     total_bytes = size * (float) sizeof(int) * 2.0f * steps;
+            // }
+            
+            gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
+            throughput_percent = (gbps / gbps_peak) * 100.0f;
+            mkeys_sec = (size / 1e6f) / (time * 1e-3f);
 
             // Print result as a table row
-            printf("%-20s %15.2f %15.2f\n", kernel_names[kernel_to_run], time, gbps);
+            printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", kernel_names[kernel_to_run], time, gbps, throughput_percent, mkeys_sec);
 
             // Copy the result from device to host and verify correctness
             cudaMemcpy(result_h, C_d, size * sizeof(int), cudaMemcpyDeviceToHost);
             fails += verify_result(ref_h, result_h, size, kernel_names[kernel_to_run]);
         }
 
-        printf("===================================================\n\n");
+        printf("=====================================================================================\n\n");
 
         // Cleanup resources for this size
         free(A_h);
