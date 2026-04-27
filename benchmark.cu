@@ -51,7 +51,8 @@ int main() {
     int sizes[] = {(int) pow(2, 15) /* 32,768 */, 
                    (int) pow(2, 20) /* 1,048,576 */, 
                    (int) pow(2, 25) /* 33,554,432 */, 
-                   (int) pow(2, 27) /* 134,217,728 */};
+                   (int) pow(2, 27) /* 134,217,728 */,
+                   (int) pow(2, 28) /* 268,435,456 */};
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
     int fails = 0;
     // Loop over each array size
@@ -129,32 +130,41 @@ int main() {
         const char *kernel_names[3] = {"", "Merge", "Bitonic"};
 
         // Run student kernels (IDs 1-2)
-        for (int kernel_to_run = 1; kernel_to_run <= 2; kernel_to_run++) {
-            gpuErrchk(cudaMemset(C_d, 0, size * sizeof(int)));
+    for (int kernel_to_run = 1; kernel_to_run <= 2; kernel_to_run++) {
+        gpuErrchk(cudaMemset(C_d, 0, size * sizeof(int)));
 
-            cudaEventRecord(start);
-            launch_sort_kernel(kernel_to_run, A_d, C_d, size);
-            cudaEventRecord(stop);
-            cudaEventSynchronize(stop);
-            cudaEventElapsedTime(&time, start, stop);
+        cudaEventRecord(start);
+        launch_sort_kernel(kernel_to_run, A_d, C_d, size);
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+        cudaEventElapsedTime(&time, start, stop);
+    
+        // 1. Calculate the 'Effective' Speed (What the user sees)
+        float effective_gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
+        float mkeys_sec = (size / 1e6f) / (time * 1e-3f);
+
+        // 2. Calculate the 'Hardware' Speed (What the Silicon does)
+        float log2_size = log2f((float) size);
+        float hardware_bytes = 0;
             
-            // float log2_size = log2f((float) size);
-            // if (kernel_to_run == 1) { // Merge
-            //     passes = log2_size;
-            //     total_bytes = size * (float) sizeof(int) * 2.0f * passes;
-            // }
-            // else if (kernel_to_run == 2) { // Bitonic
-            //    
-            //     float steps = (log2_size * (log2_size + 1.0f)) / 2.0f;
-            //     total_bytes = size * (float) sizeof(int) * 2.0f * steps;
-            // }
+            if (kernel_to_run == 1) { // Merge
+                // We start with 1024-sized blocks, then merge up. 
+                // Passes = (log2(N) - log2(1024)) + 1 initial sort
+                float passes = max(1.0f, log2_size - 10.0f + 1.0f); 
+                hardware_bytes = size * (float) sizeof(int) * 2.0f * passes;
+            }
+            else if (kernel_to_run == 2) { // Bitonic
+               // Bitonic moves data for every step in the sorting network
+                float steps = (log2_size * (log2_size + 1.0f)) / 2.0f;
+                hardware_bytes = size * (float) sizeof(int) * steps;
+            }
             
-            gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
-            throughput_percent = (gbps / gbps_peak) * 100.0f;
-            mkeys_sec = (size / 1e6f) / (time * 1e-3f);
+            float hardware_gbps = (hardware_bytes * 1e-9f) / (time * 1e-3f);
+            float hardware_percent = (hardware_gbps / gbps_peak) * 100.0f;
 
             // Print result as a table row
-            printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", kernel_names[kernel_to_run], time, gbps, throughput_percent, mkeys_sec);
+            printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", 
+                kernel_names[kernel_to_run], time, effective_gbps, hardware_percent, mkeys_sec);
 
             // Copy the result from device to host and verify correctness
             cudaMemcpy(result_h, C_d, size * sizeof(int), cudaMemcpyDeviceToHost);
