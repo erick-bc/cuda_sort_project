@@ -6,5 +6,5 @@ Look up instructions online for compatibility if needed.
 # Running the code
 
 On the terminal, run `make`. The output executable is `sort.exe` and can be run as
-`./sort.exe`. 
+`make run`. 
 If modified, you can run `make clean` and then `make` to see the new results.
