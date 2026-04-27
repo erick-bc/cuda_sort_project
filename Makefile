@@ -1,26 +1,34 @@
-# Taken from Dr. Wu's assignment code.
-# Path to the compiler
+# ==============================================================================
+# CUDA Parallel Sort Project - University of Houston
+# Target Hardware: NVIDIA RTX 3080 (Ampere sm_86)
+# ==============================================================================
+
 NVCC := /usr/local/cuda-12.6/bin/nvcc
 
-# Compiler Flags
-# -O3: Maximum optimization
-# -use_fast_math: Speeds up float math (crucial for GB/s gains)
-# -arch=sm_86: Specifically targets the Ampere architecture (RTX 3080)
-# -lineinfo: Keeps track of code lines in the binary (crucial for debugging illegal memory access)
-NVCC_FLAGS = -O3 -use_fast_math -arch=sm_86 -lineinfo -Xcompiler -O3
+# Compiler Flags - Optimized for Vanguard 12.5
+# --std=c++17: Modern CUDA features
+# -O3: Maximum compiler optimization
+# -use_fast_math: Hardware-level math units
+# -arch=sm_86: RTX 3080 Ampere architecture
+# -lineinfo: Source code mapping for debugging
+# -Xptxas -O3: PTX assembly-level optimization
+# -Xptxas -v: Verbose output to check register usage and memory spills!
+NVCC_FLAGS := --std=c++17 -O3 -use_fast_math -arch=sm_86 -lineinfo \
+              -Xptxas -O3 -Xptxas -v \
+              -Xcompiler -O3 -Xcompiler -Wall
 
-# Host Compiler Flags
-# -Wall: Show all warnings
-# -O3: Optimize the C++ side (benchmark.cu logic)
-XFLAGS := -Xcompiler -Wall -Xcompiler -O3
-
-# Build Targets
 TARGET := sort.exe
+SOURCES := benchmark.cu template.cu
 
 all: $(TARGET)
 
-$(TARGET): benchmark.cu template.cu
-	$(NVCC) $(NVCCFLAGS) $(XFLAGS) $^ -o $@
+$(TARGET): $(SOURCES)
+	$(NVCC) $(NVCC_FLAGS) $^ -o $@
+
+run: $(TARGET)
+	./$(TARGET)
 
 clean:
 	rm -f $(TARGET)
+
+.PHONY: all clean run

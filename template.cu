@@ -4,8 +4,9 @@
 #include <cuda_runtime.h>
 #include <algorithm>// For std::min and std::max
 #include <climits> // Added for INT_MAX
+#include <cuda_pipeline.h> 
 #define BS 128 // more registers per thread
-#define TILE 1024
+#define TILE 1024 // 8x Register Tiling
 #define BANK_PADDING 8 
 
 
@@ -32,7 +33,6 @@ using std::size_t;
 __device__ __forceinline__ int co_rank_safe(int k, const int* __restrict__ A, int a_len, const int* __restrict__ B, int b_len) {
     int low = (k > b_len) ? k - b_len : 0;
     int high = (k < a_len) ? k : a_len;
-    // unroll binary search
     #pragma unroll 10
     while (low < high) {
         int i = low + (high - low) / 2;
@@ -98,7 +98,8 @@ __global__ void block_sort_kernel(int* __restrict__ in, int* __restrict__ out, i
     }
 }
 // - - Kernel 1, Coarsened Parallel Merge Kernel - -
-// GPU Kernel for Merge Sort
+// GPU Kernel for Merge Sort.
+// 
 template<int TILE_SIZE>
 __global__ void __launch_bounds__(BS) merge_stage_kernel_v12(const int* __restrict__ in, int* __restrict__ out, int size, int wid) {
     extern __shared__ int shared_mem[];
@@ -154,7 +155,6 @@ __global__ void __launch_bounds__(BS) merge_stage_kernel_v12(const int* __restri
         int out_idx = tile_start_global + t_start;
         int write_len = t_end - t_start;
         
-        // Check both start AND end bounds to prevent memory corruption
         if (out_idx >= 0 && out_idx + write_len <= size) {
             merge_sequential(sA + a_s, a_e - a_s, sB + b_s, b_e - b_s, out + out_idx);
         }
@@ -263,4 +263,3 @@ extern "C" void launch_sort_kernel(int kernel_id, int *A, int *C, int size) {
         cudaFree(gpu_temp);
     }
 }
-
