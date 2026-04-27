@@ -61,7 +61,7 @@ int main() {
         printf("=====================================================================================\n");
         printf("Sorting for size: %zu\n", size);
         printf("-------------------------------------------------------------------------------------\n");
-        printf("%-20s %15s %15s %15s %15s\n", "Kernel", "Time (ms)", "GB/s", "Peak bandwidth %%", "MKeys/s");
+        printf("%-20s %15s %15s %15s %15s\n", "Kernel", "Time (ms)", "GB/s", "Peak bandwidth %", "MKeys/s");
         printf("-------------------------------------------------------------------------------------\n");
 
         int *A_d, *C_d;
@@ -139,37 +139,41 @@ int main() {
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&time, start, stop);
     
-        // 1. Calculate the 'Effective' Speed (What the user sees)
-        float effective_gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
-        float mkeys_sec = (size / 1e6f) / (time * 1e-3f);
+        // comment out in case we use this
+        // // 1. Calculate the 'Effective' Speed (What the user sees)
+        // float effective_gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
+        // mkeys_sec = (size / 1e6f) / (time * 1e-3f);
 
-        // 2. Calculate the 'Hardware' Speed (What the Silicon does)
-        float log2_size = log2f((float) size);
-        float hardware_bytes = 0;
+        // // 2. Calculate the 'Hardware' Speed (What the Silicon does)
+        // float log2_size = log2f((float) size);
+        // float hardware_bytes = 0;
             
-            if (kernel_to_run == 1) { // Merge
-                // We start with 1024-sized blocks, then merge up. 
-                // Passes = (log2(N) - log2(1024)) + 1 initial sort
-                float passes = max(1.0f, log2_size - 10.0f + 1.0f); 
-                hardware_bytes = size * (float) sizeof(int) * 2.0f * passes;
-            }
-            else if (kernel_to_run == 2) { // Bitonic
-               // Bitonic moves data for every step in the sorting network
-                float steps = (log2_size * (log2_size + 1.0f)) / 2.0f;
-                hardware_bytes = size * (float) sizeof(int) * steps;
-            }
-            
-            float hardware_gbps = (hardware_bytes * 1e-9f) / (time * 1e-3f);
-            float hardware_percent = (hardware_gbps / gbps_peak) * 100.0f;
+        // if (kernel_to_run == 1) { // Merge
+        //     // We start with 1024-sized blocks, then merge up. 
+        //     // Passes = (log2(N) - log2(1024)) + 1 initial sort
+        //     float passes = max(1.0f, log2_size - 10.0f + 1.0f); 
+        //     hardware_bytes = size * (float) sizeof(int) * 2.0f * passes;
+        // }
+        // else if (kernel_to_run == 2) { // Bitonic
+        //     // Bitonic moves data for every step in the sorting network
+        //     float steps = (log2_size * (log2_size + 1.0f)) / 2.0f;
+        //     hardware_bytes = size * (float) sizeof(int) * steps;
+        // }
+        
+        // float hardware_gbps = (hardware_bytes * 1e-9f) / (time * 1e-3f);
+        // float hardware_percent = (hardware_gbps / gbps_peak) * 100.0f;
+        gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
+        mkeys_sec = (size / 1e6f) / (time * 1e-3f);
+        throughput_percent = (gbps / gbps_peak) * 100.0f; 
 
-            // Print result as a table row
-            printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", 
-                kernel_names[kernel_to_run], time, effective_gbps, hardware_percent, mkeys_sec);
+        // Print result as a table row
+        printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", 
+            kernel_names[kernel_to_run], time, gbps, throughput_percent, mkeys_sec);
 
-            // Copy the result from device to host and verify correctness
-            cudaMemcpy(result_h, C_d, size * sizeof(int), cudaMemcpyDeviceToHost);
-            fails += verify_result(ref_h, result_h, size, kernel_names[kernel_to_run]);
-        }
+        // Copy the result from device to host and verify correctness
+        cudaMemcpy(result_h, C_d, size * sizeof(int), cudaMemcpyDeviceToHost);
+        fails += verify_result(ref_h, result_h, size, kernel_names[kernel_to_run]);
+    }
 
         printf("=====================================================================================\n\n");
 
