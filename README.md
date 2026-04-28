@@ -6,8 +6,8 @@ Look up instructions online for compatibility if needed.
 # Running the code
 
 The workflow is as follows:
-1. On the terminal, run `make all` or simply `make`. 
-2. The output executable is `sort.exe` and can be run as `make run`. 
-3. To get throughput results, run `make throughput`. This can take some time.
+1. On the terminal, run `make all` or simply `make`. This makes the output executable `sort.exe`.
+2. To get the work throughput, run `make run` to see `MKeys/s`.
+3. To get memory bandwidth results, run `make throughput` to see `GB/s` and `Peak bandwidth %`. This can take some time.
 
 If modified, you can run `make clean` and then run as normal.

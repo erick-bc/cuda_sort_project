@@ -48,21 +48,23 @@ int main() {
     // Array sizes to test
     gpuErrchk(cudaSetDevice(0));
 
-    int sizes[] = {(int) pow(2, 15) /* 32,768 */, 
+    int sizes[] = { // this structure makes it easier to comment stuff out for testing
+                   (int) pow(2, 15) /* 32,768 */, 
                    (int) pow(2, 20) /* 1,048,576 */,
                    (int) pow(2, 25) /* 33,554,432 */, 
                    (int) pow(2, 27) /* 134,217,728 */,
-                   (int) pow(2, 28) /* 268,435,456 */};
+                   (int) pow(2, 15) /* 268,435,456 */,
+                   };
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
     int fails = 0;
     // Loop over each array size
     for (int s = 0; s < num_sizes; s++) {
         size_t size = sizes[s];
-        printf("=====================================================================================\n");
+        printf("=======================================================\n");
         printf("Sorting for size: %zu\n", size);
-        printf("-------------------------------------------------------------------------------------\n");
+        printf("-------------------------------------------------------\n");
         printf("%-20s %15s %15s\n", "Kernel", "Time (ms)", "MKeys/s");
-        printf("-------------------------------------------------------------------------------------\n");
+        printf("-------------------------------------------------------\n");
 
         int *A_d, *C_d;
         int *A_h, *result_h, *ref_h;
@@ -135,7 +137,7 @@ int main() {
         fails += verify_result(ref_h, result_h, size, kernel_names[kernel_to_run]);
     }
 
-        printf("=====================================================================================\n\n");
+        printf("=======================================================\n\n");
 
         // Cleanup resources for this size
         free(A_h);
