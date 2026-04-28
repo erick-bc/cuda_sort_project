@@ -53,7 +53,7 @@ int main() {
                    (int) pow(2, 20) /* 1,048,576 */,
                    (int) pow(2, 25) /* 33,554,432 */, 
                    (int) pow(2, 27) /* 134,217,728 */,
-                   (int) pow(2, 15) /* 268,435,456 */,
+                   (int) pow(2, 28) /* 268,435,456 */,
                    };
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
     int fails = 0;
