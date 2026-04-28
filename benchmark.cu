@@ -5,6 +5,11 @@
 #include <thrust/sort.h>
 #include <thrust/device_ptr.h>
 #include <thrust/functional.h>
+#include <string>
+#include <sstream>
+#include <vector>
+#include <fstream>
+#include <iomanip>
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,6 +21,7 @@ void launch_sort_kernel(int kernel_id, int *A, int *C, int size);
 }
 #endif
 
+#define KERNEL_AMT 2
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true) {
    if (code != cudaSuccess) {
@@ -42,7 +48,7 @@ int verify_result(const int* reference, const int* result, int size, const char*
     return errors > 0 ? 1 : 0;
 }
 
-using std::size_t;
+using std::size_t, std::string, std::vector;
 
 int main() {
     // Array sizes to test
@@ -51,15 +57,30 @@ int main() {
     int sizes[] = { // this structure makes it easier to comment stuff out for testing
                    (int) pow(2, 15) /* 32,768 */, 
                    (int) pow(2, 20) /* 1,048,576 */,
-                   (int) pow(2, 25) /* 33,554,432 */, 
-                   (int) pow(2, 27) /* 134,217,728 */,
-                   (int) pow(2, 28) /* 268,435,456 */,
+                   // (int) pow(2, 25) /* 33,554,432 */, 
+                   // (int) pow(2, 27) /* 134,217,728 */,
+                   // (int) pow(2, 28) /* 268,435,456 */,
                    };
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
     int fails = 0;
+    vector<vector<string>> vals(1 + num_sizes); // header plus amount of rows
+    const int horiz_val_amt = 3 + KERNEL_AMT; // size + thrusts + manual kernels
+    for (size_t i = 0; i < vals.size(); i++) {
+        vals[i].resize(horiz_val_amt);
+    }
+    vals[0][0] = "array size";
+    vals[0][1] = "thrust radix mkeys";
+    vals[0][2] = "thrust compare mkeys";
+    vals[0][3] = "merge mkeys";
+    vals[0][4] = "bitonic mkeys";
+    std::stringstream ss;
+
     // Loop over each array size
+    int t;
     for (int s = 0; s < num_sizes; s++) {
+        t = s + 1;
         size_t size = sizes[s];
+        vals[t][0] = std::to_string(size);
         printf("=======================================================\n");
         printf("Sorting for size: %zu\n", size);
         printf("-------------------------------------------------------\n");
@@ -101,6 +122,9 @@ int main() {
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&time, start, stop);
         float mkeys_sec = (size / 1e6f) / (time * 1e-3f);
+        ss << std::fixed << std::setprecision(2) << mkeys_sec;
+        vals[t][1] = ss.str();
+        ss.str("");
         printf("%-20s %15.2f %15.2f\n", "Thrust Sort (Radix)", time, mkeys_sec);
 
         // Compute reference result using Thrust sort (Merge)
@@ -112,6 +136,9 @@ int main() {
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&time, start, stop);
         mkeys_sec = (size / 1e6f) / (time * 1e-3f);
+        ss << std::fixed << std::setprecision(2) << mkeys_sec;
+        vals[t][2] = ss.str();
+        ss.str("");
         printf("%-20s %15.2f %15.2f\n", "Thrust Sort (Merge)", time, mkeys_sec);
 
         // Copy reference result back to host
@@ -120,22 +147,25 @@ int main() {
         const char *kernel_names[3] = {"", "Merge", "Bitonic"};
 
         // Run student kernels (IDs 1-2)
-    for (int kernel_to_run = 1; kernel_to_run <= 2; kernel_to_run++) {
-        gpuErrchk(cudaMemset(C_d, 0, size * sizeof(int)));
+        for (int kernel_to_run = 1; kernel_to_run <= KERNEL_AMT; kernel_to_run++) {
+            gpuErrchk(cudaMemset(C_d, 0, size * sizeof(int)));
 
-        cudaEventRecord(start);
-        launch_sort_kernel(kernel_to_run, A_d, C_d, size);
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time, start, stop);
-    
-        mkeys_sec = (size / 1e6f) / (time * 1e-3f);
-        printf("%-20s %15.2f %15.2f\n", kernel_names[kernel_to_run], time, mkeys_sec);
+            cudaEventRecord(start);
+            launch_sort_kernel(kernel_to_run, A_d, C_d, size);
+            cudaEventRecord(stop);
+            cudaEventSynchronize(stop);
+            cudaEventElapsedTime(&time, start, stop);
+        
+            mkeys_sec = (size / 1e6f) / (time * 1e-3f);
+            ss << std::fixed << std::setprecision(2) << mkeys_sec;
+            vals[t][2 + kernel_to_run] = ss.str();
+            ss.str("");
+            printf("%-20s %15.2f %15.2f\n", kernel_names[kernel_to_run], time, mkeys_sec);
 
-        // Copy the result from device to host and verify correctness
-        cudaMemcpy(result_h, C_d, size * sizeof(int), cudaMemcpyDeviceToHost);
-        fails += verify_result(ref_h, result_h, size, kernel_names[kernel_to_run]);
-    }
+            // Copy the result from device to host and verify correctness
+            cudaMemcpy(result_h, C_d, size * sizeof(int), cudaMemcpyDeviceToHost);
+            fails += verify_result(ref_h, result_h, size, kernel_names[kernel_to_run]);
+        }
 
         printf("=======================================================\n\n");
 
@@ -152,5 +182,18 @@ int main() {
     if (fails > 0) {
         exit(1);
     }
+
+    string vals_str;
+    for (const auto& row : vals) {
+        for (size_t i = 0; i < row.size() - 1; i++) {
+            vals_str.append(row[i] + ",");
+        }
+        vals_str.append(row[row.size() - 1] + "\n");
+    }
+
+    std::ofstream out("./mkeys_per_sec.csv");
+    out << vals_str.c_str();
+    out.close();
+
     return 0;
 }
