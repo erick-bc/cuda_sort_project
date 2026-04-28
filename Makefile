@@ -20,6 +20,9 @@ NVCC_FLAGS := --std=c++17 -O3 -use_fast_math -arch=sm_86 -lineinfo \
 TARGET := sort.exe
 SOURCES := benchmark.cu template.cu
 
+NCU := ncu
+NCU_METRICS := dram__bytes_read.sum,dram__bytes_write.sum,gpu__time_duration.sum
+
 all: $(TARGET)
 
 $(TARGET): $(SOURCES)
@@ -28,7 +31,14 @@ $(TARGET): $(SOURCES)
 run: $(TARGET)
 	./$(TARGET)
 
-clean:
-	rm -f $(TARGET)
+throughput: $(TARGET)
+	TMPDIR=$$HOME/tmp $(NCU) --set basic \
+	       --metrics $(NCU_METRICS) \
+	       --csv \
+	       ./$(TARGET) > profile_out.csv 2>profile_err.txt
+	python3 throughput.py profile_out.csv
 
-.PHONY: all clean run
+clean:
+	rm -f $(TARGET) profile_out.csv profile_err.txt
+
+.PHONY: all clean run throughput

@@ -5,6 +5,9 @@ Look up instructions online for compatibility if needed.
 
 # Running the code
 
-On the terminal, run `make`. The output executable is `sort.exe` and can be run as
-`make run`. 
-If modified, you can run `make clean` and then `make` to see the new results.
+The workflow is as follows:
+1. On the terminal, run `make all` or simply `make`. 
+2. The output executable is `sort.exe` and can be run as `make run`. 
+3. To get throughput results, run `make throughput`. This can take some time.
+
+If modified, you can run `make clean` and then run as normal.

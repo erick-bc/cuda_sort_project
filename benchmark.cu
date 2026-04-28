@@ -49,7 +49,7 @@ int main() {
     gpuErrchk(cudaSetDevice(0));
 
     int sizes[] = {(int) pow(2, 15) /* 32,768 */, 
-                   (int) pow(2, 20) /* 1,048,576 */, 
+                   (int) pow(2, 20) /* 1,048,576 */,
                    (int) pow(2, 25) /* 33,554,432 */, 
                    (int) pow(2, 27) /* 134,217,728 */,
                    (int) pow(2, 28) /* 268,435,456 */};
@@ -61,7 +61,7 @@ int main() {
         printf("=====================================================================================\n");
         printf("Sorting for size: %zu\n", size);
         printf("-------------------------------------------------------------------------------------\n");
-        printf("%-20s %15s %15s %15s %15s\n", "Kernel", "Time (ms)", "GB/s", "Peak bandwidth %", "MKeys/s");
+        printf("%-20s %15s %15s\n", "Kernel", "Time (ms)", "MKeys/s");
         printf("-------------------------------------------------------------------------------------\n");
 
         int *A_d, *C_d;
@@ -82,7 +82,7 @@ int main() {
         gpuErrchk(cudaMalloc(&C_d, size * sizeof(int)));
 
         // Copy host data to device
-        cudaMemcpy(A_d, A_h, size * sizeof(int), cudaMemcpyHostToDevice);
+        gpuErrchk(cudaMemcpy(A_d, A_h, size * sizeof(int), cudaMemcpyHostToDevice));
 
         // Create CUDA events for timing
         cudaEvent_t start, stop;
@@ -90,8 +90,6 @@ int main() {
         cudaEventCreate(&stop);
         float time;
 
-        float gbps_peak = 760.0f; // from hardware specs
-        float total_bytes = size * (float) sizeof(int) * 2.0f; 
         // Compute reference result using Thrust sort (Radix)
         cudaMemcpy(C_d, A_d, size * sizeof(int), cudaMemcpyDeviceToDevice);
         cudaEventRecord(start);
@@ -100,13 +98,8 @@ int main() {
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&time, start, stop);
-        
-        // passes = 4.0f;
-        // total_bytes = size * (float) sizeof(int) * 2.0f * passes;
-        float gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
-        float mkeys_sec = (size / 1e6f) / (time * 1e-3f); // Millions of Keys per second
-        float throughput_percent = (gbps / gbps_peak) * 100.0f; 
-        printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", "Thrust Sort (Radix)", time, gbps, throughput_percent, mkeys_sec);
+        float mkeys_sec = (size / 1e6f) / (time * 1e-3f);
+        printf("%-20s %15.2f %15.2f\n", "Thrust Sort (Radix)", time, mkeys_sec);
 
         // Compute reference result using Thrust sort (Merge)
         cudaMemcpy(C_d, A_d, size * sizeof(int), cudaMemcpyDeviceToDevice);
@@ -116,13 +109,8 @@ int main() {
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&time, start, stop);
-        
-        // passes = log2f((float) size);
-        // total_bytes = size * (float) sizeof(int) * 2.0f * passes;
-        gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
         mkeys_sec = (size / 1e6f) / (time * 1e-3f);
-        throughput_percent = (gbps / gbps_peak) * 100.0f; 
-        printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", "Thrust Sort (Merge)", time, gbps, throughput_percent, mkeys_sec);
+        printf("%-20s %15.2f %15.2f\n", "Thrust Sort (Merge)", time, mkeys_sec);
 
         // Copy reference result back to host
         cudaMemcpy(ref_h, C_d, size * sizeof(int), cudaMemcpyDeviceToHost);
@@ -139,36 +127,8 @@ int main() {
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&time, start, stop);
     
-        // comment out in case we use this
-        // // 1. Calculate the 'Effective' Speed (What the user sees)
-        // float effective_gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
-        // mkeys_sec = (size / 1e6f) / (time * 1e-3f);
-
-        // // 2. Calculate the 'Hardware' Speed (What the Silicon does)
-        // float log2_size = log2f((float) size);
-        // float hardware_bytes = 0;
-            
-        // if (kernel_to_run == 1) { // Merge
-        //     // We start with 1024-sized blocks, then merge up. 
-        //     // Passes = (log2(N) - log2(1024)) + 1 initial sort
-        //     float passes = max(1.0f, log2_size - 10.0f + 1.0f); 
-        //     hardware_bytes = size * (float) sizeof(int) * 2.0f * passes;
-        // }
-        // else if (kernel_to_run == 2) { // Bitonic
-        //     // Bitonic moves data for every step in the sorting network
-        //     float steps = (log2_size * (log2_size + 1.0f)) / 2.0f;
-        //     hardware_bytes = size * (float) sizeof(int) * steps;
-        // }
-        
-        // float hardware_gbps = (hardware_bytes * 1e-9f) / (time * 1e-3f);
-        // float hardware_percent = (hardware_gbps / gbps_peak) * 100.0f;
-        gbps = (total_bytes * 1e-9f) / (time * 1e-3f);
         mkeys_sec = (size / 1e6f) / (time * 1e-3f);
-        throughput_percent = (gbps / gbps_peak) * 100.0f; 
-
-        // Print result as a table row
-        printf("%-20s %15.2f %15.2f %15.2f%% %15.2f\n", 
-            kernel_names[kernel_to_run], time, gbps, throughput_percent, mkeys_sec);
+        printf("%-20s %15.2f %15.2f\n", kernel_names[kernel_to_run], time, mkeys_sec);
 
         // Copy the result from device to host and verify correctness
         cudaMemcpy(result_h, C_d, size * sizeof(int), cudaMemcpyDeviceToHost);
