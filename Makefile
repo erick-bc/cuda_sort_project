@@ -32,6 +32,7 @@ run: $(TARGET)
 	./$(TARGET)
 
 throughput: $(TARGET)
+	mkdir -p $(HOME)/tmp
 	TMPDIR=$$HOME/tmp $(NCU) --set basic \
 	       --metrics $(NCU_METRICS) \
 	       --csv \
