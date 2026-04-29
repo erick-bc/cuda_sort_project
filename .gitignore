@@ -61,5 +61,6 @@ $RECYCLE.BIN/
 
 .vscode
 
-*.txt
+profile_err.txt
 *.csv
+-requirements.txt

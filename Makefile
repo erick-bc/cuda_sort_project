@@ -40,6 +40,6 @@ throughput: $(TARGET)
 	python3 throughput.py profile_out.csv
 
 clean:
-	rm -f $(TARGET) profile_out.csv profile_err.txt
+	rm -f $(TARGET) profile_out.csv mkeys_per_sec.csv gbps.csv profile_err.txt
 
 .PHONY: all clean run throughput

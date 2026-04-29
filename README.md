@@ -11,3 +11,8 @@ The workflow is as follows:
 3. To get memory bandwidth results, run `make throughput` to see `GB/s` and `Peak bandwidth %`. This can take some time.
 
 If modified, you can run `make clean` and then run as normal.
+
+# Plotting
+
+Plotting can be done after you get at least one CSV file from `make run` or `make throughput`. From here, get
+the needed libraries with `pip install -r requirements.txt` in your virtual environment and run `python3 plots.py`.

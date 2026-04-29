@@ -182,6 +182,26 @@ def main():
 
     for size, group in zip(sizes, groups):
         print_table(size, group, args.peak_gbps)
+    
+    # Maintain existing console output
+    for size, group in zip(sizes, groups):
+        print_table(size, group, args.peak_gbps)
+
+    # New Logic: Export to CSV
+    with open('gbps.csv', 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(["array size", "thrust radix gbps", "thrust compare gbps", "merge gbps", "bitonic gbps"])
+        
+        for size, group in zip(sizes, groups):
+            row = [size]
+            for algo in ALGO_ORDER:
+                total_bytes = group["bytes_read"][algo] + group["bytes_write"][algo]
+                total_ns = group["time_ns"][algo]
+                gbps = (total_bytes / total_ns) if total_ns > 0 else 0.0
+                row.append(round(gbps, 2))
+            writer.writerow(row)
+    
+    print(f"Summary saved to gbps.csv")
 
 
 if __name__ == "__main__":
